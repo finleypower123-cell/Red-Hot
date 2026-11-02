@@ -19,7 +19,7 @@ jobs:
       - name: Install Ninja
         run: brew install ninja
 
-      - name: Configure (universal: Apple Silicon + Intel)
+      - name: "Configure (universal: Apple Silicon + Intel)"
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release

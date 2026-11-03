@@ -35,7 +35,7 @@ endif()
 option(PEPPER_BUILD_AAX "Build the AAX (Pro Tools) format" ON)
 option(PEPPER_COPY_AFTER_BUILD "Install the plug-ins to the system folders after building" OFF)
 
-set(PEPPER_FORMATS VST3)
+set(PEPPER_FORMATS VST3 Standalone)
 if(APPLE)
     list(APPEND PEPPER_FORMATS AU)
 endif()
@@ -58,6 +58,8 @@ juce_add_plugin(Pepper
     VST3_CATEGORIES          Fx Distortion
     AU_MAIN_TYPE             kAudioUnitType_Effect
     AAX_CATEGORY             AAX_ePlugInCategory_Harmonic
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "PEPPER needs your audio input so you can play your guitar through it."
     COPY_PLUGIN_AFTER_BUILD  ${PEPPER_COPY_AFTER_BUILD})
 
 target_sources(Pepper PRIVATE

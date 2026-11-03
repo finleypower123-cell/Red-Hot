@@ -1,0 +1,171 @@
+# Builds PEPPER on GitHub's Intel Mac and Windows machines, tests it, and publishes
+# every build as a downloadable Release on the repo's Releases page
+# (same setup as Fin's Ego Lift 5000 and Belgian Sauna).
+#
+# The Mac build is universal (Intel + Apple Silicon) and is built and validated on an
+# Intel Mac, so the Intel side is the one auval and pluginval actually run.
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            name: Mac
+          - os: windows-latest
+            name: Windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (Mac, universal Intel + Apple Silicon)
+        if: runner.os == 'macOS'
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          -DPEPPER_BUILD_TESTS=ON
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -DPEPPER_BUILD_TESTS=ON
+
+      - name: Build VST3, AU, AAX and the app
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Run DSP tests
+        shell: bash
+        run: |
+          t=build/tests/PepperDspTests_artefacts/Release/PepperDspTests
+          if [ -f "$t.exe" ]; then "$t.exe"; else "$t"; fi
+
+      - name: Run plug-in tests (presets, state, GUI)
+        if: runner.os == 'macOS'
+        run: ./build/tests/PepperPluginTests_artefacts/Release/PepperPluginTests "$RUNNER_TEMP/pepper_gui"
+
+      - name: Check the Mac binaries contain Intel code
+        if: runner.os == 'macOS'
+        run: |
+          ART=build/Pepper_artefacts/Release
+          for b in "$ART/VST3/PEPPER.vst3" "$ART/AU/PEPPER.component" "$ART/AAX/PEPPER.aaxplugin" "$ART/Standalone/PEPPER.app"; do
+            lipo -archs "$b/Contents/MacOS/PEPPER"
+            lipo -archs "$b/Contents/MacOS/PEPPER" | grep -q x86_64
+          done
+
+      - name: Ad-hoc sign (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          ART=build/Pepper_artefacts/Release
+          for b in "$ART/VST3/PEPPER.vst3" "$ART/AU/PEPPER.component" "$ART/AAX/PEPPER.aaxplugin" "$ART/Standalone/PEPPER.app"; do
+            if [ -d "$b" ]; then codesign --force --deep --sign - "$b"; fi
+          done
+
+      - name: Validate AU on Intel (auval)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/Pepper_artefacts/Release/AU/PEPPER.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          sleep 2
+          auval -strict -v aufx Ppr1 Rhot
+
+      - name: Validate VST3 on Intel (pluginval)
+        if: runner.os == 'macOS'
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests --validate-in-process \
+            --validate build/Pepper_artefacts/Release/VST3/PEPPER.vst3
+
+      - name: Package (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          ART="$GITHUB_WORKSPACE/build/Pepper_artefacts/Release"
+          OUT="$GITHUB_WORKSPACE/out"
+          mkdir -p "$OUT"
+
+          # Double-click installer: AAX into the Pro Tools folder, VST3 + AU into the system plug-in folders
+          ROOT="$RUNNER_TEMP/pkgroot"
+          mkdir -p "$ROOT/Library/Audio/Plug-Ins/VST3" "$ROOT/Library/Audio/Plug-Ins/Components" \
+                   "$ROOT/Library/Application Support/Avid/Audio/Plug-Ins"
+          cp -R "$ART/VST3/PEPPER.vst3" "$ROOT/Library/Audio/Plug-Ins/VST3/"
+          cp -R "$ART/AU/PEPPER.component" "$ROOT/Library/Audio/Plug-Ins/Components/"
+          cp -R "$ART/AAX/PEPPER.aaxplugin" "$ROOT/Library/Application Support/Avid/Audio/Plug-Ins/"
+          pkgbuild --analyze --root "$ROOT" "$RUNNER_TEMP/components.plist"
+          plutil -convert xml1 "$RUNNER_TEMP/components.plist"
+          perl -0pi -e 's#(<key>BundleIsRelocatable</key>\s*)<true/>#$1<false/>#g' "$RUNNER_TEMP/components.plist"
+          mkdir -p "$RUNNER_TEMP/installer"
+          pkgbuild --root "$ROOT" --component-plist "$RUNNER_TEMP/components.plist" --identifier com.redhot.pepper \
+                   --version 1.0.${{ github.run_number }} --install-location / "$RUNNER_TEMP/installer/Install PEPPER.pkg"
+          ditto -c -k --keepParent "$RUNNER_TEMP/installer/Install PEPPER.pkg" "$OUT/PEPPER-Mac-Installer.zip"
+
+          cd "$ART"
+          ditto -c -k --keepParent "Standalone/PEPPER.app" "$OUT/PEPPER-Mac-App.zip"
+          ditto -c -k --keepParent VST3 "$OUT/PEPPER-Mac-VST3.zip"
+          ditto -c -k --keepParent AU "$OUT/PEPPER-Mac-AU.zip"
+          ditto -c -k --keepParent AAX "$OUT/PEPPER-Mac-AAX-unsigned.zip"
+
+          # Everything in one zip as well (kept on the 'builds' branch for a fixed download link)
+          mkdir -p "$RUNNER_TEMP/all/PEPPER"
+          cp -R VST3/PEPPER.vst3 AU/PEPPER.component AAX/PEPPER.aaxplugin "$RUNNER_TEMP/all/PEPPER/"
+          cp "$RUNNER_TEMP/installer/Install PEPPER.pkg" "$GITHUB_WORKSPACE/packaging/Install PEPPER.command" "$GITHUB_WORKSPACE/README.md" "$RUNNER_TEMP/all/PEPPER/"
+          (cd "$RUNNER_TEMP/all" && ditto -c -k --keepParent PEPPER "$RUNNER_TEMP/PEPPER-macOS.zip")
+          ls -la "$OUT"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $r = "build/Pepper_artefacts/Release"
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path "$r/Standalone/*" -DestinationPath out/PEPPER-Windows-App.zip
+          Compress-Archive -Path "$r/VST3/*" -DestinationPath out/PEPPER-Windows-VST3.zip
+          if (Test-Path "$r/AAX") { Compress-Archive -Path "$r/AAX/*" -DestinationPath out/PEPPER-Windows-AAX-unsigned.zip }
+          Get-ChildItem out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PEPPER-${{ matrix.name }}
+          path: out/*.zip
+
+      - name: Save Mac build to the 'builds' branch (fixed download link)
+        if: runner.os == 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p "$RUNNER_TEMP/branch" && cd "$RUNNER_TEMP/branch"
+          git init -q
+          git checkout -q -b builds
+          cp "$RUNNER_TEMP/PEPPER-macOS.zip" .
+          printf '# PEPPER builds\n\nLatest macOS build of `main` (%s): [PEPPER-macOS.zip](PEPPER-macOS.zip)\n' "${GITHUB_SHA::7}" > README.md
+          git add PEPPER-macOS.zip README.md
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "PEPPER macOS build ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" builds
+
+  release:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        if: hashFiles('dist/*.zip') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${{ github.run_number }}"
+          gh release create "$tag" dist/*.zip --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "PEPPER (build ${{ github.run_number }})" \
+            --notes "Pro Tools on Mac: download PEPPER-Mac-Installer.zip, unzip it and double-click Install PEPPER.pkg (right-click > Open the first time). It puts the AAX in the Pro Tools plug-in folder and the VST3/AU in the system plug-in folders. The AAX is unsigned: it loads in Pro Tools Developer now, and in regular Pro Tools once it is signed with PACE. Built and tested on an Intel Mac; the Mac files run on Intel and Apple Silicon. PEPPER-Mac-App.zip / PEPPER-Windows-App.zip is the standalone app: plug in your guitar and play. Mac: if macOS blocks it, open System Settings > Privacy & Security and click Open Anyway. Windows: click More info > Run anyway."

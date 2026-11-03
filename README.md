@@ -43,15 +43,33 @@ PEPPER is a pedal-style distortion: for a full amp sound, put an amp or cabinet 
 Save your own with **SAVE** — they go in `~/Documents/PEPPER/Presets` as small `.pepper` files you can share
 with the band. Your DAW's own preset system works too.
 
-## Installing
+## Download it
 
-1. Download **[PEPPER-macOS.zip](https://github.com/finleypower123-cell/Red-Hot/raw/builds/PEPPER-macOS.zip)**
-   (always the latest build of `main`, no GitHub login needed), or grab it from **Releases** if there is one.
-2. Unzip it and double-click **Install PEPPER.pkg**. The first time, macOS will say it's from an unidentified
-   developer: right-click it → **Open**, or allow it under System Settings → Privacy & Security → **Open Anyway**.
-   It installs the AAX into `/Library/Application Support/Avid/Audio/Plug-Ins` (Pro Tools) and the VST3 / AU into
-   `/Library/Audio/Plug-Ins`. (Prefer Terminal? **Install PEPPER.command** does the same into your user folders.)
-3. Restart your DAW and look for **PEPPER** by **Red Hot** under Distortion / Harmonic.
+Go to this repo's **Releases** page (on the right, or `/releases`). Every push to `main` is built and tested on
+GitHub's **Intel Mac** and Windows machines and published there as a new build. Each build gives you:
+
+| File | What it's for |
+|---|---|
+| `PEPPER-Mac-Installer.zip` | **Start here for Pro Tools.** Double-click installer: AAX into the Pro Tools folder, VST3 + AU into the system plug-in folders |
+| `PEPPER-Mac-App.zip` / `PEPPER-Windows-App.zip` | The standalone app. Plug in your guitar and play, no DAW needed |
+| `PEPPER-Mac-AAX-unsigned.zip` / `PEPPER-Windows-AAX-unsigned.zip` | Pro Tools. Needs PACE signing or Pro Tools Developer (see below) |
+| `PEPPER-Mac-VST3.zip` / `PEPPER-Windows-VST3.zip` | Ableton, Reaper, Cubase, Studio One, FL Studio |
+| `PEPPER-Mac-AU.zip` | Logic and GarageBand |
+
+The Mac files are universal: they run on Intel and Apple Silicon Macs. The Intel side is the one that's built,
+tested and validated (auval + pluginval) on GitHub. The latest Mac build is also always at
+**[PEPPER-macOS.zip](https://github.com/finleypower123-cell/Red-Hot/raw/builds/PEPPER-macOS.zip)** (everything in one zip).
+
+**Installing on a Mac**
+1. Unzip `PEPPER-Mac-Installer.zip` and double-click **Install PEPPER.pkg**. The first time, macOS blocks it: right-click it
+   and choose **Open**, or go to System Settings → Privacy & Security and click **Open Anyway**.
+2. Restart your DAW and look for **PEPPER** by **Red Hot** under Distortion / Harmonic.
+
+**Playing through the app**
+1. Unzip it and open it (Mac: System Settings → Privacy & Security → **Open Anyway** the first time, then allow audio input.
+   Windows: **More info → Run anyway**).
+2. Go to **Options → Audio/MIDI Settings** and pick your audio interface. Plug your guitar into its instrument input.
+3. Click the yellow "input muted" bar to unmute, and play. Use headphones or monitors, not laptop speakers.
 
 ### Pro Tools
 

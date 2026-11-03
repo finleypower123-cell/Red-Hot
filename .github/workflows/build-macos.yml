@@ -75,10 +75,9 @@ jobs:
           if [ -d "$ART/AU/PEPPER.component" ]; then cp -R "$ART/AU/PEPPER.component" "$ROOT/Library/Audio/Plug-Ins/Components/"; fi
           if [ -d "$ART/AAX/PEPPER.aaxplugin" ]; then cp -R "$ART/AAX/PEPPER.aaxplugin" "$ROOT/Library/Application Support/Avid/Audio/Plug-Ins/"; fi
           pkgbuild --analyze --root "$ROOT" dist/components.plist
-          n=$(/usr/libexec/PlistBuddy -c "Print" dist/components.plist | grep -c "BundleIsRelocatable" || true)
-          for i in $(seq 0 $((n - 1))); do
-            /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" dist/components.plist
-          done
+          plutil -convert xml1 dist/components.plist
+          perl -0pi -e 's#(<key>BundleIsRelocatable</key>\s*)<true/>#$1<false/>#g' dist/components.plist
+          grep -A1 BundleIsRelocatable dist/components.plist
           pkgbuild --root "$ROOT" --component-plist dist/components.plist --identifier com.redhot.pepper \
                    --version 1.0.0 --install-location / "dist/PEPPER/Install PEPPER.pkg"
           if [ -f "$RUNNER_TEMP/pepper_gui_1.png" ]; then cp "$RUNNER_TEMP/pepper_gui_1.png" dist/PEPPER/screenshot.png; fi

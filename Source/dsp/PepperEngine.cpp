@@ -119,6 +119,7 @@ void PepperEngine::updateFilters (bool force) noexcept
 
 void PepperEngine::process (float* const* channels, int numChannels, int numSamples) noexcept
 {
+    juce::ScopedNoDenormals noDenormals;
     numChannels = juce::jmin (numChannels, kMaxChannels);
     inPeak = outPeak = 0.0f;
     if (numChannels <= 0) return;

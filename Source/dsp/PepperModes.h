@@ -92,7 +92,7 @@ struct FuzzVoice
         float y = s2 * 0.82f + oct * 0.55f;
 
         if (fold > 0.0f)
-            y = y * (1.0f - fold) + std::sin (y * 2.6f) * fold;
+            y = y * (1.0f - fold) + fastSin (y * 2.6f) * fold;
 
         y = scoop.process (y, ch);
         return outLp.lp (y, ch) * 0.75f;
@@ -304,15 +304,16 @@ protected:
     float processSample (float x, int ch, float t) noexcept override
     {
         // the overdrive only clips what's above ~720 Hz, then sums back with the clean signal
-        const float clipped = triode (tsHp.hp (x, ch) * drive.at (t), 0.08f);
+        const float clipped = tr1 (tsHp.hp (x, ch) * drive.at (t));
         const float y = tsLp.lp (x * 0.55f + clipped * 0.5f, ch);
         // gentle, slightly asymmetric amp stage for the crunch
-        return triode (ampFront.process (y * amp.at (t), ch), 0.18f) * 0.8f;
+        return tr2 (ampFront.process (y * amp.at (t), ch)) * 0.8f;
     }
 
     float trimDb (float heat) const override { return table5 (trim, heat); }
 
 private:
+    const Triode tr1 { 0.08f }, tr2 { 0.18f };
     static constexpr float trim[5] { 6.6f, -0.1f, -6.2f, -10.2f, -11.6f }; // auto-level (dB)
     OnePole tsHp, tsLp;
     DriveSlew ampFront;
@@ -358,7 +359,7 @@ protected:
 
     float processSample (float x, int ch, float t) noexcept override
     {
-        float a = triode (front1.process (x * g1.at (t), ch), 0.25f); // biased preamp triode
+        float a = tr1 (front1.process (x * g1.at (t), ch)); // biased preamp triode
         a = interLp.lp (interHp.hp (a, ch), ch);                       // cathode-bypass style high-pass
         return sinClamp (front2.process (a * g2.at (t), ch)) * 0.85f;  // hard-knee grit
     }
@@ -366,6 +367,7 @@ protected:
     float trimDb (float heat) const override { return table5 (trim, heat); }
 
 private:
+    const Triode tr1 { 0.25f };
     static constexpr float trim[5] { -3.1f, -8.9f, -12.2f, -13.3f, -13.3f }; // auto-level (dB)
     OnePole interHp, interLp;
     DriveSlew front1, front2;
@@ -478,9 +480,9 @@ protected:
 
     float processSample (float x, int ch, float t) noexcept override
     {
-        float a = triode (front1.process (x * g1.at (t), ch), 0.2f);
+        float a = tr1 (front1.process (x * g1.at (t), ch));
         a = lp1.lp (hp1.hp (a, ch), ch);
-        float b = triode (front2.process (a * g2.at (t), ch), -0.15f);
+        float b = tr2 (front2.process (a * g2.at (t), ch));
         b = lp2.lp (hp2.hp (b, ch), ch);
         return fastTanh (front3.process (b * g3.at (t), ch)) * 0.8f;
     }
@@ -488,6 +490,7 @@ protected:
     float trimDb (float heat) const override { return table5 (trim, heat); }
 
 private:
+    const Triode tr1 { 0.2f }, tr2 { -0.15f };
     static constexpr float trim[5] { -11.5f, -14.0f, -14.4f, -14.2f, -13.7f }; // auto-level (dB)
     OnePole hp1, hp2, lp1, lp2;
     DriveSlew front1, front2, front3;
@@ -549,11 +552,11 @@ protected:
     float processSample (float x, int ch, float t) noexcept override
     {
         const float g = gs.at (t);
-        float s = triode (front1.process (x * g, ch), 0.3f);
+        float s = tr1 (front1.process (x * g, ch));
         s = lp1.lp (hp1.hp (s, ch), ch);
-        s = triode (front2.process (s * g, ch), -0.2f);
+        s = tr2 (front2.process (s * g, ch));
         s = lp2.lp (hp2.hp (s, ch), ch);
-        s = triode (front3.process (s * g, ch), 0.25f);
+        s = tr3 (front3.process (s * g, ch));
         s = lp3.lp (hp3.hp (s, ch), ch);
         // power-supply sag: the louder the third stage, the less drive into the last
         const float sag = 1.0f / (1.0f + sagDepth.at (t) * sagEnv.process (s, ch));
@@ -563,6 +566,7 @@ protected:
     float trimDb (float heat) const override { return table5 (trim, heat); }
 
 private:
+    const Triode tr1 { 0.3f }, tr2 { -0.2f }, tr3 { 0.25f };
     static constexpr float trim[5] { -12.8f, -14.1f, -14.3f, -13.9f, -13.5f }; // auto-level (dB)
     OnePole hp1, hp2, hp3, lp1, lp2, lp3;
     Envelope sagEnv;
@@ -616,7 +620,7 @@ protected:
         s = hp1.hp (lp1.lp (s, ch), ch);
         const float v = expandStage (s * g2.at (t));              // Fracture expansion
         const float c = chaos.at (t);
-        float y = sinClamp (v) * (1.0f - c) + std::sin (v) * c;   // blend in the wavefold
+        float y = sinClamp (v) * (1.0f - c) + fastSin (v) * c;    // blend in the wavefold
         y = fastTanh (1.6f * y + 0.2f) - fastTanh (0.2f);         // starved, biased output stage
         return slewOut.process (lp2.lp (y, ch) * 0.85f, ch);
     }

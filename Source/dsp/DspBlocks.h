@@ -34,12 +34,29 @@ inline float fastTanh (float x) noexcept
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
+/** sin(x) for |x| <= pi/2 (odd Taylor series to x^9, error < 4e-6). */
+inline float sinHalfRange (float x) noexcept
+{
+    const float x2 = x * x;
+    return x * (1.0f + x2 * (-1.6666667e-1f + x2 * (8.3333333e-3f + x2 * (-1.9841270e-4f + x2 * 2.7557319e-6f))));
+}
+
+/** Fast sin(x) for any x (used by the wavefolders). */
+inline float fastSin (float x) noexcept
+{
+    constexpr float invPi = 0.31830988618f, pi = 3.14159265359f;
+    const float k = std::nearbyint (x * invPi);
+    const float r = x - k * pi;                         // r in [-pi/2, pi/2]
+    const float s = sinHalfRange (r);
+    return (static_cast<int> (k) & 1) ? -s : s;
+}
+
 /** Sine soft-clip: linear-ish near zero, reaches ±1 at ±pi/2 with zero slope (Airwindows Density). */
 inline float sinClamp (float x) noexcept
 {
     if (x >= kHalfPi)  return 1.0f;
     if (x <= -kHalfPi) return -1.0f;
-    return std::sin (x);
+    return sinHalfRange (x);
 }
 
 /** Cubic soft clip: harder knee than tanh, ±1 with zero slope at |x| = 1. */
@@ -49,13 +66,20 @@ inline float cubicClip (float x) noexcept
     return 1.5f * x - 0.5f * x * x * x;
 }
 
-/** Biased tanh — a triode-ish stage. Asymmetry adds even harmonics; slope at 0 is 1. */
-inline float triode (float x, float bias) noexcept
+/** Biased tanh — a triode-ish stage. Asymmetry adds even harmonics; slope at 0 is 1.
+    The bias-dependent constants are worked out once, not per sample. */
+struct Triode
 {
-    const float tb = fastTanh (bias);
-    const float norm = 1.0f / std::max (0.2f, 1.0f - tb * tb);
-    return (fastTanh (x + bias) - tb) * norm;
-}
+    float bias = 0.0f, offset = 0.0f, norm = 1.0f;
+
+    explicit Triode (float b = 0.0f) noexcept : bias (b)
+    {
+        offset = fastTanh (b);
+        norm = 1.0f / std::max (0.2f, 1.0f - offset * offset);
+    }
+
+    inline float operator() (float x) const noexcept { return (fastTanh (x + bias) - offset) * norm; }
+};
 
 /** Airwindows "Fracture" expansion stage: grows faster than linear, feeds a folder. */
 inline float expandStage (float x) noexcept { return x * (std::abs (x) + 1.0f); }
@@ -144,20 +168,20 @@ private:
 /** One-pole low/high pass. */
 struct OnePole
 {
-    double a = 0.0;                    // feedback coefficient
-    double z[kMaxChannels] {};
+    float a = 0.0f;                    // feedback coefficient
+    float z[kMaxChannels] {};
 
-    void reset() noexcept { std::fill (std::begin (z), std::end (z), 0.0); }
+    void reset() noexcept { std::fill (std::begin (z), std::end (z), 0.0f); }
 
     void setCutoff (double fs, double f) noexcept
     {
-        a = std::exp (-2.0 * kPi * std::clamp (f, 1.0, fs * 0.49) / fs);
+        a = (float) std::exp (-2.0 * kPi * std::clamp (f, 1.0, fs * 0.49) / fs);
     }
 
     inline float lp (float x, int ch) noexcept
     {
         z[ch] = x + a * (z[ch] - x);
-        return (float) z[ch];
+        return z[ch];
     }
 
     inline float hp (float x, int ch) noexcept { return x - lp (x, ch); }

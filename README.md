@@ -45,12 +45,13 @@ with the band. Your DAW's own preset system works too.
 
 ## Installing
 
-1. Open the **Actions** tab of this repo → latest **Build PEPPER (macOS)** run → download **PEPPER-macOS**
-   (or grab the zip from **Releases** if there is one).
-2. Unzip it and double-click **Install PEPPER.command** (right-click → Open the first time, since it's not
-   notarised). It copies the VST3 and AU to your user plug-in folders, the AAX to the Pro Tools folder, and
-   clears the "downloaded from the internet" flag.
-3. Restart your DAW and look for **PEPPER** by **Red Hot** under Distortion.
+1. Download **[PEPPER-macOS.zip](https://github.com/finleypower123-cell/Red-Hot/raw/builds/PEPPER-macOS.zip)**
+   (always the latest build of `main`, no GitHub login needed), or grab it from **Releases** if there is one.
+2. Unzip it and double-click **Install PEPPER.pkg**. The first time, macOS will say it's from an unidentified
+   developer: right-click it → **Open**, or allow it under System Settings → Privacy & Security → **Open Anyway**.
+   It installs the AAX into `/Library/Application Support/Avid/Audio/Plug-Ins` (Pro Tools) and the VST3 / AU into
+   `/Library/Audio/Plug-Ins`. (Prefer Terminal? **Install PEPPER.command** does the same into your user folders.)
+3. Restart your DAW and look for **PEPPER** by **Red Hot** under Distortion / Harmonic.
 
 ### Pro Tools
 
